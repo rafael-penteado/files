@@ -1,0 +1,300 @@
+<div>
+  <div class="table-title div-top" >
+      <h3 class="div-top-h3">Audiências - Prepostos</h3>
+  </div>
+
+  <ngb-tabset>
+    <ngb-tab>
+      <ng-template ngbTabTitle>
+      <div>Audiências</div>
+      </ng-template>
+      <ng-template ngbTabContent>
+        <div class="col-xl-12 col-lg-12 col-lg-12 col-lg-12 div-nav-top">
+          <div class="panel panel-primary" id="div_filtros">
+            <div class="panel-heading">
+              <h3 class="panel-title panel-tile-font-size"> Filtro de Audiências</h3>
+            </div>
+            <div class="panel-body">                
+                <form [formGroup]="filtroAudienciasFormPeriodo" (ngSubmit)="onSubmit()" style="margin-top: 10px;">
+                  <div class="form-group">
+                    <div>
+                      <label for="txtMesAnoInicio" style="font-size: 12px;">Mês/Ano Ínicio:
+                        <input type="text" formControlName="txtMesAnoInicio" class="form-control control-margin" mask="00-00-0000" placeholder="DD-MM-YYYY" [ngClass]="{ 'is-invalid': submitted && f.txtMesAnoInicio.errors }"/>                      
+                      </label>
+                      &nbsp;
+                      <label for="txtMesAnoFim" style="font-size: 12px;">Mês/Ano Fim:
+                        <input type="text" formControlName="txtMesAnoFim" class="form-control control-margin" mask="00-00-0000" placeholder="DD-MM-YYYY" [ngClass]="{ 'is-invalid': submitted && f.txtMesAnoFim.errors }"/>
+                      </label>
+                      &nbsp;                                        
+                    </div>
+                    <br>
+                    <label for="txtNumPasta" style="font-size: 12px;">Pasta:
+                      <input type="number" formControlName="txtNumPasta" class="form-control control-margin" placeholder="Nro. Pasta"/>
+                    </label>
+                    &nbsp;
+                    <label for="txtNumProcesso" style="font-size: 12px;">Nro. Processo:
+                      <input type="text" formControlName="txtNumProcesso" class="form-control control-margin" placeholder="Nro. Processo"/>
+                    </label>
+                    &nbsp;
+                    <label for="txtNomReclamante" style="font-size: 12px;">Nome Reclamante:
+                      <input type="text" formControlName="txtNomReclamante" class="form-control control-margin largue-field" placeholder="Nome Reclamante"/>
+                    </label>
+                    <label for="txtNomReu" style="font-size: 12px; display: none;">Nome do Réu:
+                      <input type="text" formControlName="txtNomReu" class="form-control control-margin" placeholder="Nome Réu" style="display: none;"/>
+                    </label>
+                    <!--<button class="btn btn-primary button-search" (click)="limparFiltros()" title="Limpar Formulário"><span class="glyphicon glyphicon-erase"></span>&nbsp;Limpar</button>-->
+                    &nbsp;
+                  <button type="submit" class="btn btn-primary" (click)="pesquisar()" title="Pesquisar">Pesquisar <span class="glyphicon glyphicon-search"></span></button>
+                  </div>                  
+                </form>                
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-xl-12 col-sm-12 col-md-12 col-lg-12">
+          <div class="panel panel-primary" id="div_audiencias">
+            <div class="panel-heading">
+              <h3 class="panel-title panel-tile-font-size"> Audiências Marcadas</h3>
+            </div>
+            <div class="panel-body container-scroll">
+              <table id="gridAudiencias" class="table table-striped table-bordered table-hover table-condensed table-font-smaller" role="grid" aria-describedby="example1_info" >
+                <thead>
+                    <tr>
+                      <th></th>
+                      <th>Pasta</th>                      
+                      <th (click)="sort('dthCitacao')">Data da Citação
+                        <span *ngIf="key =='dthCitacao'">{{reverse ? '▲' : '▼'}}</span> 
+                      </th>                      
+                      <th (click)="sort('dthAudiencia')">Data Audiência
+                        <span *ngIf="key =='dthAudiencia'">{{reverse ? '▲' : '▼'}}</span> 
+                      </th>
+                      <th>Horário</th>
+                      <th>Nro. do Processo</th>
+                      <th>Reclamante</th>
+                      <th>Local da Audiência</th>
+                      <th>UF</th>
+                      <th>Comarca</th>
+                      <th>RECDA</th>                      
+                      <th>Centro de Custo</th>
+                      <th>Status</th>
+                    </tr>                  
+                </thead>
+                <tbody>
+                  <tr *ngFor="let itemaudiencia of audiencias | paginate: { itemsPerPage: 25, currentPage: paginaAtual } | orderBy: key : reverse; let i = index">
+                      <td>
+                        <button id="excluirAudiencia" class="btn glyphicon glyphicon-trash btn-xs" title="Excluir Audiência" (click)="_excluirAudiencia(itemaudiencia)"></button>
+                        <button id="editarAudiência"  class="btn glyphicon glyphicon-pencil btn-xs" title="Editar Audiência" (click)="_editarAudiencia(itemaudiencia, content)"></button>
+                      </td>
+                      <td>{{itemaudiencia.codPasta }}</td>
+                      <td>{{itemaudiencia.dthCitacao | date:'dd/MM/yyyy'}}</td>
+                      <td>{{itemaudiencia.dthAudiencia | date:'dd/MM/yyyy'}}</td>
+                      <td>{{itemaudiencia.dthHoraAudiencia | date:'HH:mm'}}</td>
+                      <td>{{itemaudiencia.desNumProcesso}}</td>
+                      <td>{{itemaudiencia.desNomeReclamante}}</td>
+                      <td>{{itemaudiencia.desLocalAudiencia}}</td>
+                      <td>{{itemaudiencia.desEstadoAudiencia}}</td>
+                      <td>{{itemaudiencia.desCidadeAudiencia}}</td>
+                      <td>{{itemaudiencia.desReu}}</td>                      
+                      <td>{{itemaudiencia.desCentroCusto}}</td>
+                      <td>{{itemaudiencia.status.descStatus}}</td>
+                    </tr>
+                </tbody>                
+              </table>
+              <pagination-controls (pageChange)="paginaAtual = $event" previousLabel="Anterior" nextLabel="Próximo"></pagination-controls>
+            </div>
+          </div>
+        </div>
+      </ng-template>
+      
+      <ng-template #content let-c="close" let-d="dismiss">
+        <div class="modal-header title-e-audiencias">
+          <h2 class="modal-title" id="modal-basic-title">Edição de Audiências</h2>
+          <button type="button" class="close" aria-label="Close" (click)="d('Cross click'); cancelarEdicaoAudiencia()">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">                
+          <div class="form-group">
+            <div class="input-group">
+              <div id="formaudiencias" class="panel panel-info">
+                <div class="panel-heading font-bold">DADOS DA AUDIÊNCIA</div>
+                  <div id="topo" class="panel-body">                                         
+                    <form [formGroup]="edicaoAudienciasForm" (ngSubmit)="onSubmitAudiencia()">
+                      <ngb-alert *ngIf="salvarAudienciaMessage" type="success" (close)="salvarAudienciaMessage = null">{{ salvarAudienciaMessage }}</ngb-alert>
+                      <div class="form-group input-align">
+                      <label for="codPasta">Pasta:</label>
+                        <input type="text" formControlName="codPasta" class="form-control-ed-audiencia control-margin">
+                      </div>
+                      <br>
+                      <div class="form-group input-align">
+                      <label for="dthCitacao">Data da Citação:</label>
+                        <input type="text" formControlName="dthCitacao" mask="00/00/0000" model-view-value="true"  placeholder="DD/MM/YYYY" class="form-control-ed-audiencia control-margin" maxlength="10">
+                      </div>
+                      <div class="form-group input-align input-adjusts">
+                      <label for="dthAudiencia">Data da Audiência:</label>
+                        <input type="text" formControlName="dthAudiencia" mask="00/00/0000" class="form-control-ed-audiencia control-margin"  placeholder="DD/MM/YYYY"> 
+                      </div>
+                      <div class="form-group input-align input-adjusts">
+                      <label for="dthHoraAudiencia">Hora da Audiência:</label>
+                        <input type="text" formControlName="dthHoraAudiencia" class="form-control-ed-audiencia control-margin" mask="00:00"  placeholder="HH:MM">
+                      </div>
+                      <br>
+                      <div class="form-group input-align">
+                      <label for="desNumProcesso">Número do Processo:</label>
+                        <input type="text" formControlName="desNumProcesso" class="form-control-ed-audiencia control-margin">                        
+                      </div>
+                      <div class="form-group input-align input-adjusts">
+                      <label for="desNomeReclamante">Reclamante:</label>
+                        <input type="text" formControlName="desNomeReclamante" class="form-control-ed-audiencia control-margin largue-field">
+                      </div>
+                      <br>
+                      <div class="form-group input-align">
+                      <label for="desLocalAudiencia">Local:</label>
+                        <input type="text" formControlName="desLocalAudiencia" class="form-control-ed-audiencia control-margin largue-field">
+                      </div>
+                      <div class="form-group input-align input-adjusts">
+                      <label for="desEstadoAudiencia">UF:</label>
+                        <input type="text" formControlName="desEstadoAudiencia" class="form-control-ed-audiencia control-margin">
+                      </div>
+                      <div class="form-group input-align">
+                      <label for="desCidadeAudiencia">Comarca:</label>
+                        <input type="text" formControlName="desCidadeAudiencia" class="form-control-ed-audiencia control-margin">
+                      </div>
+                      <div class="form-group input-align input-adjusts">
+                      <label for="desReu">RECDA:</label>
+                        <input type="text" formControlName="desReu" class="form-control-ed-audiencia control-margin"> 
+                      </div>                                        
+                      <div class="form-group input-align input-adjusts">
+                      <label for="desCentroCusto">Contrato de Origem:</label>
+                        <input type="text" formControlName="desCentroCusto" class="form-control-ed-audiencia control-margin">
+                      </div>
+                      <div class="form-group input-align">
+                      <label for="desObservacao">Observação:</label>
+                        <textarea formControlName="desObservacao" class="form-control-ed-audiencia control-margin largue-field" style="width:440px !important; height: 70px;"></textarea>
+                      </div>
+                      <div class="form-group">
+                      <label for="descStatus">Status:</label>
+                      <br>
+                        <input type="text" formControlName="descStatus" readonly class="form-control-ed-audiencia control-margin">
+                      </div>
+                      <br>
+                      <span>
+                        <button type="submit"  class="btn btn-primary button-search" id="salvarAudiencia" (click)="salvarAudiencia()" ><span class="glyphicon glyphicon-save-file"></span> Salvar</button>&nbsp;
+                        <button type="reset" class="btn btn-primary button-search" title="Cancelar"  (click)="cancelarEdicaoAudiencia()"><span class="glyphicon glyphicon-ban-circle"></span> Cancelar</button>&nbsp;
+                        <button class="btn btn-primary button-search" id="finalizarAudiencia" [hidden]="hiddenBtnFinalizarAudiencia()" title="finalizar a Audiência" (click)="finalizarAudiencia(audiencia.codAudiencia)"><span class="glyphicon glyphicon-ok-circle"></span>&nbsp;Finalizar Audiência</button>
+                      </span>                                                                   
+                    </form>                      
+                  </div>
+                </div>
+              </div>
+              
+              <div id="formdadospreposto" class="panel panel-info">
+                <div class="panel-heading font-bold">PREPOSTOS SELECIONADOS</div>
+                <div class="panel-body">
+                  <span id="messagepreposto" class="span-message-preposto"></span>                  
+                    <div id="listprepostos">                      
+                      <table class="table table-striped table-bordered table-hover table-condensed table-font-smaller table-width" role="grid" aria-describedby="example1_info" style="margin-top: 10px;">
+                        <thead>
+                          <tr>                      
+                            <th></th>
+                            <th>Matrícula</th>
+                            <th>Nome</th>                      
+                          </tr>
+                        </thead>
+                        <tbody style="font-size: smaller" >
+                          <tr *ngFor="let itemPreposto of arrPrepostos">                      
+                            <td style="width:33%">
+                              <span id="edicaoPrepostos">
+                                <button id="excluirPreposto" (click)= "_excluirPreposto(itemPreposto)" class="btn glyphicon glyphicon-trash btn-xs btn-editar-preposto" title="Excluir Preposto"></button>
+                                <button id="editarPreposto"  (click)="_editarPreposto(itemPreposto)" class="btn glyphicon glyphicon-pencil btn-xs btn-editar-preposto" title="Editar Preposto"></button>
+                              </span>
+                              <span>
+                                Carta:
+                                <select class="custom-selsect" style="width: auto" #tipoCartaPreposicao>
+                                  <option value="">Selecione...</option>
+                                  <option value="1">Tipo Cível</option>
+                                  <option value="2">Tipo JEC/ADM</option>
+                                </select>
+                                <button id="cartaPreposto" (click)="gerarCartaPreposicao(tipoCartaPreposicao.value, itemPreposto)" class="btn glyphicon glyphicon-ok btn-xs btn-editar-preposto" title="Gerar carta preposição"></button>
+                              </span>
+                            </td>
+                            <td style="width:5%">{{ itemPreposto.codMatricula }}</td>
+                            <td style="width:62%">{{ itemPreposto.funcionario?.nomeUsuario || "" }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                </div>
+              </div>
+              
+              <div id="forminclusaoedicaopreposto" class="panel panel-info">
+                <div class="panel-heading font-bold">PREPOSTOS</div>
+                  <div class="panel-body">
+                  
+                    <form [formGroup]="edicaoInclusaoPrepostoForm" (ngSubmit)="onSubmitPreposto()">                    
+                      <ngb-alert *ngIf="salvarPrepostoMessage" type="success" (close)="salvarPrepostoMessage = null">{{ salvarPrepostoMessage }}</ngb-alert>
+                      <div class="form-group input-align">
+                      <label for="codMatricula">Matrícula:</label>                      
+                        <input type="text" formControlName="codMatricula" class="form-control-ed-audiencia control-margin" mask="000000" maxlength="6"  #itemName (blur)="_consultarDadosFuncionario(itemName.value)">
+                      </div>                    
+                      <span style="font-size: smaller; margin-left: 5px;">{{ funcionarioMessage }}</span>
+                      <br> 
+                      <div class="form-group input-align">
+                      <label for="nomePreposto">Nome:</label>                      
+                        <input type="text" formControlName="nomePreposto" class="form-control-ed-audiencia control-margin largue-field" readonly>
+                      </div>
+                      <div class="form-group input-align input-adjusts">
+                      <label for="codRG">RG:</label>                      
+                      <input type="text" formControlName="codRG" class="form-control-ed-audiencia control-margin" (keypress)="numberOnly($event)">                      
+                      </div>
+                      <div class="form-group input-align">
+                      <label for="cpfPreposto">CPF:</label>
+                      <br>                      
+                        <input type="text" formControlName="cpfPreposto" class="form-control-ed-audiencia control-margin" readonly>
+                      </div>
+                      <div class="form-group input-align input-adjusts">
+                      <label for="desEndereco">Endereço:</label>                      
+                        <input type="text" formControlName="desEndereco" class="form-control-ed-audiencia control-margin largue-field">
+                      </div>                                      
+                      <div class="form-group">
+                      <label for="desObservacao-preposto">Observação:</label>                      
+                        <textarea formControlName="desObservacaopreposto" class="form-control-ed-audiencia control-margin largue-field" style="width:440px !important; height: 70px;"></textarea>
+                      </div>
+                      <br>
+                      <button type="submit" id="salvarPrepostos" class="btn btn-primary button-search" (click)="salvarPreposto()"><span class="glyphicon glyphicon-save-file"></span> Salvar</button>&nbsp;
+                      <button type="reset" class="btn btn-primary button-search" title="Cancelar"  (click)="cancelarEdicaoInclusaoPreposto()"><span class="glyphicon glyphicon-ban-circle"></span> Cancelar</button>
+                    </form>                    
+                </div>
+              </div>
+            </div>
+          </div>
+      </ng-template>
+    </ngb-tab>
+
+    <ngb-tab title="Administrativo">
+      <ng-template ngbTabContent>
+        <div class="col-xl-12 col-lg-12 col-lg-12 col-lg-12 div-nav-top">
+          <div class="panel panel-primary">
+            <div class="panel-heading">
+              <h3 class="panel-title">Upload de Planilha</h3>
+            </div>
+            <div class="panel-body">
+              <div class="box-body">
+                <div class="row">
+                    <table>
+                        <tr>
+                            <td><input type="file" title="Importar planilha" (change)="onFileChange($event)" style="margin-left:20px" accept=".xlsx"/></td>
+                        </tr>
+                    </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </ng-template>
+    </ngb-tab>
+  </ngb-tabset>
+</div>
+
+<ngx-loading [show]="loading" [config]="{ backdropBorderRadius: '5px' }" ></ngx-loading>
+

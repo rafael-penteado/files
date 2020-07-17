@@ -1,0 +1,802 @@
+import { Component, OnInit, ViewChild, ɵConsole } from '@angular/core';
+import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { NgbModalConfig, NgbActiveModal, NgbModal } from '@ng-bootstrap/ng-bootstrap';
+import { AudienciaPrepostoService } from 'src/app/_services/Juridico/AudienciaPreposto/audiencia-preposto.service';
+import { PrepostoFuncionarioService } from 'src/app/_services/Juridico/AudienciaPreposto/preposto-funcionario.service';
+import { DatePipe } from '@angular/common';
+import { AudienciaArquivo } from 'src/app/_models/Juridico/AudienciaPreposto/audiencia-arquivo';
+import { AudienciaStatus } from 'src/app/_models/Juridico/AudienciaPreposto/audiencia-status';
+import { AudienciaPreposto } from 'src/app/_models/Juridico/AudienciaPreposto/audiencia-preposto';
+import { Audiencia } from 'src/app/_models/Juridico/AudienciaPreposto/audiencia';
+import { AudienciaCarta } from 'src/app/_models/Juridico/AudienciaPreposto/audiencia-carta';
+import { MatDialog } from '@angular/material/dialog';
+import * as XLSX from 'xlsx';
+import { IFramePageViewerComponent } from 'src/app/_components/IFramePageViewer/iframe-page-viewer.component';
+import { f } from "src/app/funcoesDeApoio";
+import { _ } from 'ag-grid-community';
+import { Funcionario } from 'src/app/_models/Juridico/AudienciaPreposto/funcionario';
+import * as $ from 'jquery';
+
+@Component({
+  selector: 'app-audiencia-preposto',
+  templateUrl: './audiencia-preposto.component.html',
+  styleUrls: ['./audiencia-preposto.component.css'],
+  providers: [NgbModalConfig, NgbModal]
+})
+
+export class AudienciaPrepostoComponent implements OnInit {
+  
+  public paginaAtual = 1;
+  filtroAudienciasFormPeriodo: FormGroup;  
+  edicaoAudienciasForm: FormGroup;
+  edicaoInclusaoPrepostoForm: FormGroup;
+  audiencia = {} as Audiencia;
+  preposto = {} as AudienciaPreposto;
+  audiencias: Audiencia[];
+  arrPrepostos: AudienciaPreposto[];
+  salvarAudienciaMessage: string;
+  salvarPrepostoMessage: string;
+  funcionarioMessage: string;
+  status: AudienciaStatus;
+  btnEditPreposto: boolean = true;
+  public loading = false;
+  public isHidden = true;
+
+  key: string = 'dthAudiencia'; 
+  reverse: boolean = false;
+  sort(key: string) {
+      this.key = key;
+      this.reverse = !this.reverse;
+  }
+  
+  constructor(private audienciaPrepostoService: AudienciaPrepostoService,
+    private prepostoFuncionarioService: PrepostoFuncionarioService,
+    private formBuilder: FormBuilder,
+    private modalService: NgbModal,
+    private dialog: MatDialog,
+    private datePipe: DatePipe    
+    ) { }
+
+    usuarioLogado = JSON.parse(localStorage.getItem('usuario'));    
+
+  ngOnInit() {        
+
+    this.filtroAudienciasFormPeriodo = this.formBuilder.group({
+      txtMesAnoInicio: [''],
+      txtMesAnoFim: [''],
+      txtNumPasta: [''],
+      txtNumProcesso: [''],
+      txtNomReclamante: [''],
+      txtNomReu: ['']
+    });
+
+    this.edicaoAudienciasForm = this.formBuilder.group({
+      codPasta: [''],
+      dthCitacao: [''],
+      dthAudiencia: [''],
+      dthHoraAudiencia: [''],
+      desNumProcesso: [''],
+      desNomeReclamante: [''],
+      desLocalAudiencia: [''],
+      desEstadoAudiencia: [''],
+      desCidadeAudiencia: [''],
+      desReu: [''],
+      desCentroCusto: [''],
+      desObservacao: [''],
+      descStatus: ['']
+    });
+
+    this.edicaoInclusaoPrepostoForm = this.formBuilder.group({
+      codMatricula: [''],
+      nomePreposto: [''],
+      codRG: [''],
+      cpfPreposto: [''],
+      desEndereco: [''],
+      desObservacaopreposto: ['']
+    });
+
+    this.salvarAudienciaMessage = null;
+    this.salvarPrepostoMessage = null;
+    this.funcionarioMessage = null;
+    this.arrPrepostos = [];    
+    this.status = null;        
+
+  }
+
+  get f() { return this.filtroAudienciasFormPeriodo.controls; };
+  get a() { return this.edicaoAudienciasForm.controls; };
+  get p() { return this.edicaoInclusaoPrepostoForm.controls; };
+
+  onSubmit() {    
+    //this.pesquisar();  
+  };
+
+
+  pesquisar(){
+    
+    this.loading = true;
+
+    if(!this.f.txtNumPasta.value && !this.f.txtNumProcesso.value 
+      && !this.f.txtNomReclamante.value && !this.f.txtNomReu.value 
+      && !this.f.txtMesAnoInicio.value && !this.f.txtMesAnoFim.value) 
+    {
+      alert("É necessário escolher um filtro para pesquisa.");
+      this.loading = false;
+      return;
+      
+    }
+
+    if((this.f.txtMesAnoInicio.value && !this.f.txtMesAnoFim.value) || (!this.f.txtMesAnoInicio.value && this.f.txtMesAnoFim.value)){
+      alert("Para pesquisa no período é necessário preencher os dois campos.");
+      this.loading = false;
+      return;
+    }
+
+    if (this.f.txtMesAnoInicio.value && this.f.txtMesAnoFim.value){
+      this._pesquisarAudienciasNoPeriodo(this.formataDataPesquisa(this.f.txtMesAnoInicio.value), 
+        this.formataDataPesquisa(this.f.txtMesAnoFim.value));
+    } 
+    else {
+              
+        let audienciaPesquisa = new Audiencia();
+
+        if(this.f.txtNumPasta.value) {
+          audienciaPesquisa.codPasta = this.f.txtNumPasta.value;
+        }
+        if(this.f.txtNumProcesso.value){          
+          audienciaPesquisa.desNumProcesso = this.f.txtNumProcesso.value;
+        }
+        if(this.f.txtNomReclamante.value){
+          audienciaPesquisa.desNomeReclamante = this.f.txtNomReclamante.value;
+        }
+        if(this.f.txtNomReu.value) {
+          audienciaPesquisa.desReu = this.f.txtNomReu.value;
+        }
+                
+        f.operations.promiseMapArray(this.audienciaPrepostoService.consultarAudienciaFormulario(audienciaPesquisa))
+        .then( resp => {
+            if(resp.length > 0){
+              this.audiencias = resp;
+            } else {
+              alert("Nenhuma Audiência encontrada!")
+              this.audiencias = [];
+            }
+        })
+        .finally(() => {
+          this.loading = false;
+        })
+        .catch(() => {
+          this.loading = false;
+        })
+    }
+  }
+
+  onSubmitPreposto() {
+    //caso venha fazer alguma validação de campo em branco
+  };
+
+  onSubmitAudiencia() {
+    //caso venha fazer alguma validação de campo em branco
+  };
+
+  _pesquisarAudienciasNoPeriodo(pInicio: string, pFim: string) {
+    this.loading = true;
+      f.operations
+        .promiseMapArray(this.audienciaPrepostoService.consultarAudienciaPorPeriodo(pInicio, pFim))
+        .then(res => {
+          if(res.length > 0){
+            this.audiencias = res;
+          } else { 
+            this.audiencias = [];}
+        })
+        .finally(() => {
+          this.loading = false;
+        })
+        .catch( err => {
+          this.loading = false;
+        })
+  }
+
+  _editarAudiencia(audiencia: Audiencia, content) {
+
+    this.loading = true;
+    this.modalService.open(content, { size: 'lg' });
+    this.arrPrepostos = [];
+    this.edicaoInclusaoPrepostoForm.reset();
+
+
+    //copia a audiencia
+    this.audiencia = { ...audiencia };
+
+    this.edicaoAudienciasForm.controls['codPasta'].setValue(audiencia.codPasta);
+    this.edicaoAudienciasForm.controls['dthCitacao'].setValue(this.datePipe.transform(audiencia.dthCitacao, 'dd/MM/yyyy'));
+    this.edicaoAudienciasForm.controls['dthAudiencia'].setValue(this.datePipe.transform(audiencia.dthAudiencia, 'dd/MM/yyyy'));
+    this.edicaoAudienciasForm.controls['dthHoraAudiencia'].setValue(this.datePipe.transform(audiencia.dthHoraAudiencia, 'HH:mm'));
+    this.edicaoAudienciasForm.controls['desNumProcesso'].setValue(audiencia.desNumProcesso);
+    this.edicaoAudienciasForm.controls['desNomeReclamante'].setValue(audiencia.desNomeReclamante);
+    this.edicaoAudienciasForm.controls['desLocalAudiencia'].setValue(audiencia.desLocalAudiencia);
+    this.edicaoAudienciasForm.controls['desEstadoAudiencia'].setValue(audiencia.desEstadoAudiencia);
+    this.edicaoAudienciasForm.controls['desCidadeAudiencia'].setValue(audiencia.desCidadeAudiencia);
+    this.edicaoAudienciasForm.controls['desReu'].setValue(audiencia.desReu);
+    this.edicaoAudienciasForm.controls['desCentroCusto'].setValue(audiencia.desCentroCusto);
+    this.edicaoAudienciasForm.controls['desObservacao'].setValue(audiencia.desObservacao);
+    this.edicaoAudienciasForm.controls['descStatus'].setValue(audiencia.status.descStatus);
+
+    this._consultarPrepostosAudiencia(audiencia.codAudiencia);
+
+  }
+
+  _consultarPrepostosAudiencia(id: string) {
+    this.audienciaPrepostoService.consultarPrepostoPorAudiencia(id)
+      .subscribe(
+        data => {
+          if (data !== null) {
+            this.arrPrepostos = data.data;
+            this.loading = false;
+          }
+      });
+  }
+
+  salvarAudiencia() {
+    this.loading = true;
+
+    let dataCitacao = this.normalizaDataControle(this.a.dthCitacao.value.toString().trim());
+    let dataAudiencia = this.normalizaDataControle(this.a.dthAudiencia.value.toString().trim());
+
+    if(!this.isValidDate(dataCitacao)) {
+      alert("Data de Citação inválida");
+      this.loading = false;
+      return;
+    }
+
+    if(!this.isValidDate(dataAudiencia)){
+      alert("Data da Audiência inválida");
+      this.loading = false;
+      return;
+    }
+
+    let audienciaRegistro: Audiencia = new Audiencia();
+
+    audienciaRegistro.codAudiencia = this.audiencia.codAudiencia;
+    audienciaRegistro.codStatus = this.audiencia.codStatus;
+    audienciaRegistro.codPasta = this.a.codPasta.value;
+
+    audienciaRegistro.dthCitacao = this.formatDate_mmddyyyy(this.a.dthCitacao.value.toString().trim());
+    audienciaRegistro.dthAudiencia = this.formatDate_mmddyyyy(this.a.dthAudiencia.value.toString().trim());
+    audienciaRegistro.dthHoraAudiencia =this.formatDate_mmddyyyy(this.a.dthAudiencia.value.toString().trim()) + " " + this.formatarHora(this.a.dthHoraAudiencia.value.toString());
+    audienciaRegistro.desNumProcesso = this.a.desNumProcesso.value;
+    audienciaRegistro.desNomeReclamante = this.a.desNomeReclamante.value;
+    audienciaRegistro.desLocalAudiencia = this.a.desLocalAudiencia.value;
+    audienciaRegistro.desEstadoAudiencia = this.a.desEstadoAudiencia.value;
+    audienciaRegistro.desCidadeAudiencia = this.a.desCidadeAudiencia.value;
+    audienciaRegistro.desReu = this.a.desReu.value;
+    audienciaRegistro.desCentroCusto = this.a.desCentroCusto.value;
+    audienciaRegistro.desObservacao = this.a.desObservacao.value;
+    audienciaRegistro.status = this.audiencia.status;      
+
+    this._salvarAudiencias(audienciaRegistro);
+  }
+  
+  _salvarAudiencias(audiencia: Audiencia) {    
+      f.operations
+        .promiseMapArray(this.audienciaPrepostoService.atualizarAudiencia(audiencia))
+        .then(res => {
+          if(res){
+            this.audiencia = { ...audiencia };
+            this.salvarAudienciaMessage = "Audiência salva com sucesso!";            
+            this.atualizarGridAudiencia(audiencia);
+          }
+        })
+        .finally(() => {
+          this.loading = false;
+          setTimeout(() => {
+            this.salvarAudienciaMessage = null;
+          }, 3000);
+        })
+        .catch(err => {
+          this.salvarAudienciaMessage = null;
+          this.loading = false;
+        })
+  }
+
+  atualizaGridPrepostos(preposto: AudienciaPreposto) {
+
+    if(this.arrPrepostos) {
+      
+      var index = this.arrPrepostos
+                        .findIndex(item => item.codPreposto == preposto.codPreposto);
+
+      this.arrPrepostos[index].codMatricula = preposto.codMatricula;
+      this.arrPrepostos[index].codRG = preposto.codRG;
+      this.arrPrepostos[index].desEndereco = preposto.desEndereco;
+      this.arrPrepostos[index].desObservacao = preposto.desObservacao;
+      
+      let prepostoFuncionario: Funcionario = new Funcionario();
+      prepostoFuncionario.nomeUsuario = this.p.nomePreposto.value.toString();
+      prepostoFuncionario.numCpf = this.p.cpfPreposto.value.toString();
+
+      this.arrPrepostos[index].funcionario = prepostoFuncionario;
+    }
+  }
+
+  atualizarGridAudiencia(audiencia: Audiencia) {
+
+    if(this.audiencias) {      
+      var index = this.audiencias
+                        .findIndex(item => item.codAudiencia == audiencia.codAudiencia );      
+
+      this.audiencias[index].codPasta = audiencia.codPasta;
+      this.audiencias[index].dthCitacao = audiencia.dthCitacao;
+      this.audiencias[index].dthAudiencia = audiencia.dthAudiencia;
+      this.audiencias[index].dthHoraAudiencia = audiencia.dthHoraAudiencia;
+      this.audiencias[index].desNumProcesso = audiencia.desNumProcesso;
+      this.audiencias[index].desNomeReclamante = audiencia.desNomeReclamante;
+      this.audiencias[index].desLocalAudiencia = audiencia.desLocalAudiencia;
+      this.audiencias[index].desEstadoAudiencia = audiencia.desEstadoAudiencia;
+      this.audiencias[index].desCidadeAudiencia = audiencia.desCidadeAudiencia;
+      this.audiencias[index].desReu = audiencia.desReu;
+      this.audiencias[index].desCentroCusto = audiencia.desCentroCusto;      
+      this.audiencias[index].codStatus = audiencia.codStatus;
+
+      f.operations.promiseMapArray(this.audienciaPrepostoService.consultarStatusAudienciaPorCodigo(this.audiencia.codStatus))
+        .then(res => {
+          if(res.length > 0)
+          {
+            this.audiencias[index].status.codStatus = res[0].codStatus;
+            this.audiencias[index].status.descStatus = res[0].descStatus;
+          }
+        })
+      }
+  }
+
+  _editarPreposto(preposto: AudienciaPreposto) {
+
+    this.preposto = { ...preposto };
+
+    this.edicaoInclusaoPrepostoForm.controls['codMatricula'].setValue(preposto.codMatricula);
+    this.edicaoInclusaoPrepostoForm.controls['nomePreposto'].setValue(preposto.funcionario.nomeUsuario);
+    this.edicaoInclusaoPrepostoForm.controls['codRG'].setValue(preposto.codRG);
+    this.edicaoInclusaoPrepostoForm.controls['cpfPreposto'].setValue(preposto.funcionario.numCpf);
+    this.edicaoInclusaoPrepostoForm.controls['desEndereco'].setValue(preposto.desEndereco);
+    this.edicaoInclusaoPrepostoForm.controls['desObservacaopreposto'].setValue(preposto.desObservacao);
+
+  }
+
+  salvarPreposto() {
+
+    let prepostoRegisto: AudienciaPreposto = new AudienciaPreposto();    
+
+    prepostoRegisto.codPreposto = this.preposto.codPreposto;
+    prepostoRegisto.codAudiencia = this.audiencia.codAudiencia;
+    prepostoRegisto.codMatricula = this.p.codMatricula.value;
+    prepostoRegisto.codRG = this.p.codRG.value;
+    prepostoRegisto.desEndereco = this.p.desEndereco.value;
+    prepostoRegisto.desObservacao = this.p.desObservacaopreposto.value;
+
+    this._salvarPreposto(prepostoRegisto);
+
+  }
+
+  _salvarPreposto(preposto: AudienciaPreposto) {
+    
+    this.loading = true;
+
+    this.usuarioLogado = JSON.parse(localStorage.getItem('usuario'));
+
+    if (this.preposto.codPreposto !== undefined && Number(this.preposto.codPreposto) > 0) {      
+      this.audienciaPrepostoService.atualizarPreposto(preposto)
+        .subscribe(() => {          
+          this.atualizaGridPrepostos(preposto);
+          this.loading = false;
+          this.salvarPrepostoMessage = 'Preposto atualizado com sucesso!';
+        setTimeout(() => {
+          this.salvarPrepostoMessage = null;
+          this.edicaoInclusaoPrepostoForm.reset();
+        }, 2000);
+      })
+    } 
+    else {
+      this.incluirPreposto(preposto);
+    }
+  }
+
+  incluirPreposto(preposto :AudienciaPreposto){
+
+    this.loading = true;
+    
+    f.operations.promiseMapArray(this.audienciaPrepostoService.postInserirPreposto(preposto))
+      .then(resp => {
+
+        if(resp > 0) {
+          
+          let prepostoFuncionario: Funcionario = new Funcionario();
+
+          preposto.codPreposto = resp;
+          prepostoFuncionario.nomeUsuario = this.p.nomePreposto.value.toString();
+          prepostoFuncionario.numCpf = this.p.cpfPreposto.value.toString();
+          preposto.funcionario = prepostoFuncionario;
+
+          this.arrPrepostos.push(preposto);
+                             
+          f.operations.promiseMapArray(this.audienciaPrepostoService.atualizarStatusAudiencia(this.audiencia.codAudiencia, "2"))
+            .then(resp => {
+              if (resp) {                
+                this.edicaoAudienciasForm.controls['descStatus'].setValue("PENDENTE DE GERAÇÃO DE CARTA");
+                this.audiencia.codStatus = 2;
+                this.atualizarGridAudiencia(this.audiencia);
+            }})
+            .finally(() => {
+              this.salvarPrepostoMessage = 'Preposto incluido com sucesso!';
+            })
+        }})
+      .finally (() => {
+          this.loading = false;
+          setTimeout(() => {
+            this.salvarPrepostoMessage = null;
+            this.edicaoInclusaoPrepostoForm.reset();
+          }, 2000);
+        })
+      .catch(err => {
+          this.salvarAudienciaMessage = null;
+          this.loading = false;
+      })
+  }
+
+
+  _excluirPreposto(preposto: AudienciaPreposto) {
+    
+    var response = confirm("Confirma a exclusão do Preposto?");    
+
+    if(response == true) {
+      let codigoAudiencia = preposto.codAudiencia;
+      this.audienciaPrepostoService.deletarPreposto(preposto.codPreposto)
+        .subscribe(() => {
+          alert("Preposto Excluído com sucesso!");      
+          //Excluir no Grid.
+          var index = this.arrPrepostos.findIndex(item => item.codPreposto == preposto.codPreposto);
+          this.arrPrepostos.splice(index, 1); 
+      });
+    } 
+    else {
+      return; }
+  }
+
+_excluirAudiencia(audiencia :Audiencia ) {
+    var response = confirm("Confirma a exclusão da Audiência?");
+    if(response == true){
+    this.audienciaPrepostoService.deletarAudiencia(Number(audiencia.codAudiencia)).subscribe(() => {
+      alert("Audiência Excluida com sucesso!");
+      //Excluir no Grid.
+      var index = this.audiencias.findIndex(item => item.codAudiencia == audiencia.codAudiencia );
+      this.audiencias.splice(index, 1);            
+      })
+    } else { 
+      return; }
+}
+
+  _consultarDadosFuncionario(matricula: string) {
+    if (matricula !== undefined) {
+      this.prepostoFuncionarioService
+        .consultarDadosFuncionario(matricula).subscribe(data => {
+          if (data.data !== undefined) {
+            this.edicaoInclusaoPrepostoForm.controls['nomePreposto'].setValue(data.data.nomeUsuario);
+            this.edicaoInclusaoPrepostoForm.controls['cpfPreposto'].setValue(data.data.numCpf);
+          }
+          else {
+            this.funcionarioMessage = "Nenhum funcionário encontrado.";
+            setTimeout(() => {
+              this.funcionarioMessage = null;
+            }, 1500)
+          }
+        });
+    } else {
+      this.funcionarioMessage = "É necessário digitar a matrícula.";
+      setTimeout(() => {
+        this.funcionarioMessage = null;
+      }, 1500);
+    }
+  }
+
+  finalizarAudiencia(codAudiencia: string) {
+    
+    var response = confirm("Confirma a finalização da Audiência?");
+    
+    if(response == true) {
+      this.loading = true;
+      f.operations.promiseMapArray(this.audienciaPrepostoService.atualizarStatusAudiencia(codAudiencia, "3"))
+        .then(resp => {
+          if(resp) {
+            this.audiencia.codStatus = 3;
+            this.audiencia.status.codStatus = "3";
+            this.audiencia.status.descStatus = "PROCESSO CONCLUÍDO";
+            this.edicaoAudienciasForm.controls['descStatus'].setValue("PROCESSO CONCLUÍDO");
+            //$("#finalizarAudiencia").hide();
+            //$("#salvarAudiencia").hide();
+            //$("#edicaoPrepostos").hide();
+            //$("#salvarPrepostos").hide();
+            this.atualizarGridAudiencia(this.audiencia);
+          }})
+        .finally(() => {
+          this.loading = false;
+          this.salvarAudienciaMessage = 'Audiência finalizada com sucesso.';
+          setTimeout(() => {
+            this.salvarAudienciaMessage = null;
+          }, 2000);})
+        .catch(() => {
+          this.loading = false;
+        }) 
+    }
+  }
+  
+  gerarCartaPreposicao(tipoCarta: string, preposto: AudienciaPreposto) {
+    if (tipoCarta !== "") {
+      this.usuarioLogado = JSON.parse(localStorage.getItem('usuario'));
+      let audienciaCarta: AudienciaCarta = new AudienciaCarta();
+      audienciaCarta.matricula = preposto.codMatricula;
+      audienciaCarta.nome = preposto.funcionario.nomeUsuario;
+      audienciaCarta.numRG = preposto.codRG;
+      audienciaCarta.numCPF = preposto.funcionario.numCpf;
+      audienciaCarta.endereco = preposto.desEndereco;
+      audienciaCarta.local = this.audiencia.desLocalAudiencia;
+      audienciaCarta.comarca = this.audiencia.desCidadeAudiencia;
+      audienciaCarta.reclamante = this.audiencia.desNomeReclamante;
+      audienciaCarta.numeroProcesso = this.audiencia.desNumProcesso;
+      audienciaCarta.reu = this.audiencia.desReu;
+      audienciaCarta.usuario = this.usuarioLogado.codUsuario.toString();
+
+      if (tipoCarta == "1") {
+        this._gerarCartaPreposicaoTipoCivel(audienciaCarta);
+      } else {
+        this._gerarCartaPreposicaoTipoJecAdm(audienciaCarta);
+      }
+    } else {      
+      alert("Necessário selecionar o tipo da carta de preposição");
+    }
+  }
+
+
+  _gerarCartaPreposicaoTipoCivel(carta: AudienciaCarta) {
+    this.loading = true;
+    this.audienciaPrepostoService.postGerarCartaPreposicaoCivel(carta).subscribe(
+      data => {
+        if (data.status && data.data && data.data.url) {
+          this.loading = false;
+          this.modalService.dismissAll();
+          this.dialog.open(IFramePageViewerComponent, { data: { caminhoUrl: data.data.url } })
+            .afterClosed()
+            .subscribe(() => {
+              console.log('fechou vizualização de documento pdf');
+            });
+        }
+      })
+  }
+
+  _gerarCartaPreposicaoTipoJecAdm(carta: AudienciaCarta) {
+    this.loading = true;
+    this.audienciaPrepostoService.postGerarCartaPreposicaoJecAdm(carta).subscribe(
+      data => {
+        if (data.status && data.data && data.data.url) {
+          this.loading = false;
+          this.modalService.dismissAll();
+          this.dialog.open(IFramePageViewerComponent, { data: { caminhoUrl: data.data.url } })
+            .afterClosed()
+            .subscribe(() => {
+              console.log('fechou vizualização de documento pdf');
+            });
+        }
+      }
+    )
+  }
+
+  _listarAudienciaPorCodigo(codAudiencia: number, incluiPreposto: boolean) {
+    this.audienciaPrepostoService.ConsultarAudienciaPorCodigo(codAudiencia, incluiPreposto).subscribe(data => {
+      if (data.data !== undefined) {
+        this.audiencia = data.data[0];        
+        this.atualizaControlesAudiencia(this.audiencia);        
+      }
+    });
+  }
+
+  cancelarEdicaoInclusaoPreposto() {
+    this.preposto = {} as AudienciaPreposto;
+    this.edicaoInclusaoPrepostoForm.reset();
+  }
+
+  limparFiltros(){
+    this.filtroAudienciasFormPeriodo.reset();
+  }
+
+  cancelarEdicaoAudiencia() {
+    this.audiencia = {} as Audiencia;
+    this.edicaoAudienciasForm.reset();
+    this.edicaoInclusaoPrepostoForm.reset();
+    this.modalService.dismissAll();
+  }
+
+  _periodoValido(pInicio: string, pFim: string) {
+
+    //validação do mês do período.
+    let mesInicio = pInicio.substring(0, 2);
+    let mesFim = pFim.substring(0, 2);
+    let retorno = true;
+
+    if (+mesInicio > 12) {
+      retorno = false; } else if (+mesFim > 12) {
+        retorno = false;
+      };
+
+      return retorno;
+  };
+  
+  /*
+  hiddenEdicaoPreposto() :boolean{
+    return (this.audiencia.status.codStatus == "3") ? true : false;
+  }
+  */
+
+  /*
+  hiddenBtnSalvarAudiencia() :boolean{
+    return this.audiencia.status.codStatus == "3" ? true : false;
+  }
+  */
+
+  hiddenBtnFinalizarAudiencia() :boolean{
+    return this.audiencia.status.codStatus == "3" ? true : false;
+  }
+
+  /*
+  hiddenBtnSalvarPreposto() :boolean{
+    return this.audiencia.status.codStatus == "3" ? true : false;
+  }
+  */
+
+  _isValidCSVFile(file: any) {
+    return file.name.endsWith(".xls");
+  }
+
+  onFileChange(evt: any) {
+
+    this.loading = true;    
+    let files = evt.srcElement.files;
+
+    /* wire up file reader */
+    const target: DataTransfer = <DataTransfer>(evt.target);
+    if (target.files.length !== 1) throw new Error('Não use multiplos arquivos.');
+    const reader: FileReader = new FileReader();
+    reader.onload = (e: any) => {
+      /* read workbook */
+      const bstr: string = e.target.result;
+      const wb: XLSX.WorkBook = XLSX.read(bstr, { type: 'binary', cellDates: true, dateNF: 'dd/mm/yyyy;@' });
+
+      /* grab first sheet */
+      const wsname: string = wb.SheetNames[0];
+      const ws: XLSX.WorkSheet = wb.Sheets[wsname];
+
+      /* save data */
+      let data = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, blankrows: false });      
+
+      let csvArr = [];
+
+      this.usuarioLogado = JSON.parse(localStorage.getItem('usuario'));      
+
+      data.forEach(item => {
+              
+          let audiencia: AudienciaArquivo = new AudienciaArquivo();
+
+          audiencia.codPasta = item[0].toString().trim();                    
+
+          if(item[1] !== undefined){
+            audiencia.dthCitacao = this.formatDateExcel(item[1].toString().trim()).toString();
+          } else {
+            audiencia.dthCitacao = "01/01/0001 12:00";
+          }
+
+          if(item[2] !== undefined){
+            audiencia.dthAudiencia = this.formatDateExcel(item[2].toString().trim()).toString();
+          } else {
+            audiencia.dthAudiencia = "01/01/0001 12:00";                  
+          }            
+
+          if(item[3] !== undefined ){
+              audiencia.dthHoraAudiencia = "01/01/0001" + " " + this.formatarHora(item[3].toString());
+          } else {
+            audiencia.dthHoraAudiencia = "01/01/0001 00:00";
+          }          
+  
+          audiencia.desNumProcesso = item[4].trim();
+          audiencia.desNomeReclamante = item[5].toString().trim();
+          audiencia.desLocalAudiencia = item[6].toString().trim();          
+          audiencia.desEstadoAudiencia = item[7].toString().trim();
+          audiencia.desCidadeAudiencia = item[8].trim();
+          audiencia.desReu = item[9].toString().trim();
+          audiencia.desBancoEnvolvido = item[11].toString().trim();
+          audiencia.desCentroCusto = item[12].trim();
+          audiencia.codUsuarioInclusao = this.usuarioLogado.codUsuario;
+          csvArr.push(audiencia);
+      });      
+
+      this.audienciaPrepostoService.postArquivoAudiencia(csvArr).subscribe(data => {        
+        alert("Audiencias Importadas com sucesso.");
+        this.loading = false;
+      });
+    };
+
+    reader.readAsBinaryString(target.files[0]); 
+  }
+
+  atualizaControlesAudiencia(audiencia :Audiencia){
+    this.edicaoAudienciasForm.controls['descStatus'].setValue(audiencia.status.descStatus);
+  }
+
+  //Formata a data da planilha em Excel.
+  formatDateExcel(data :string){
+    let split = [];    
+    split = data.split("/",3);    
+    
+    let dia = (split[0].length == 1) ? "0" + split[0] : split[0];
+    let mes = split[1];
+    let ano = split[2];
+
+    return mes + "/" + dia + "/" + ano; 
+  }
+
+  //Normaliza a Data para salvar no banco.
+  formatDate_mmddyyyy(data: string) :string{    
+    let regular = data.split("/").join("");
+    let dia = regular.substr(0,2);
+    let mes = regular.substr(2,2);
+    let ano = regular.substr(4,8);    
+
+    return mes + "/" + dia + "/" + ano;
+  }
+
+  //formata no padrão "dd/mm/yyyy"
+  normalizaDataControle(data: string) :string {
+    let regular = data.split("/").join("");
+    let dia = regular.substr(0,2);
+    let mes = regular.substr(2,2);
+    let ano = regular.substr(4,8);
+
+    return dia + "/" + mes + "/" + ano; 
+  }
+
+  //valida se é data válida.
+  isValidDate(s) :boolean {
+    var separators = ['\\.', '\\-', '\\/'];
+    var bits = s.split(new RegExp(separators.join('|'), 'g'));
+    var d = new Date(bits[2], bits[1] - 1, bits[0]);
+    return d.getFullYear() == bits[2] && d.getMonth() + 1 == bits[1];
+  }
+
+  formataDataPesquisa(date :string) {
+    let dia = date.substr(0,2);
+    let mes = date.substr(2,2);
+    let ano = date.substr(4,8);
+    return  dia + "-" + mes + "-" + ano;
+  }
+
+  //formata a hora caso não detecte a mascara de "00:00"
+  formatarHora(hora: string){    
+    if(hora == ""){
+      return "00:00";
+    }
+    if(hora.indexOf(":") == -1){
+      if(hora.length == 4){
+        return hora.substr(0,2) + ":" + hora.substr(2,2);
+      }
+      else {
+        return "00:00";
+      }        
+    } else {
+      return hora;
+    }    
+  }
+  
+  numberOnly(event): boolean {
+    const charCode = (event.which) ? event.which : event.keyCode;
+    if (charCode > 31 && (charCode < 48 || charCode > 57)) {
+      return false;
+    }
+    return true;
+  }
+}
